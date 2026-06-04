@@ -9,7 +9,7 @@ One folder per GitHub issue. Each folder has a short **README**, detailed **note
 | [#19952](https://github.com/visit-dav/visit/issues/19952) | [19952-average-value/](19952-average-value/) | Fixed + enhanced | `src/avt/Queries/Queries/` (+ factory, viewer, `Query.rst`) | `src/test/tests/queries/average_weighting.py`, `statistics_ghosts.py`, `statistics_query.py` | `repro/bug_19952.py`, `repro/bug_19952_ghost.py` |
 | [#18984](https://github.com/visit-dav/visit/issues/18984) | [18984-scatter-log-axis/](18984-scatter-log-axis/) | Diagnosed (pending) | (no code fix yet) | — | `repro/bug_18984.py` |
 
-Sprint summary: [../BUGFIX_REPORT.md](../BUGFIX_REPORT.md)
+Sprint summary: [../README.md](../README.md)
 
 Run all repro scripts (requires a local `build/`):
 

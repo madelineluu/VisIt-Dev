@@ -23,7 +23,7 @@ comparisons.
 | #18984 | Log scaling in the scatter plot leaves axis labels incorrect | **Diagnosed, not fixed (pending)** | [bugs/18984-scatter-log-axis/](bugs/18984-scatter-log-axis/) |
 | #19952 | "Average Value" query doesn't make sense (+ ghost handling) | **Fixed & enhanced, verified** | [bugs/19952-average-value/](bugs/19952-average-value/) |
 
-**Index:** [bugs/README.md](bugs/README.md) · **Submission:** [SUBMISSION.md](SUBMISSION.md)
+**Per-issue index:** [bugs/README.md](bugs/README.md)
 
 ---
 

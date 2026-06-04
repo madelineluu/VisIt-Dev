@@ -10,9 +10,8 @@ This repository is a personal fork of VisIt 3.4.0 with fixes and documentation f
 
 | Document | Purpose |
 |----------|---------|
-| [docs/BUGFIX_REPORT.md](docs/BUGFIX_REPORT.md) | Sprint summary for graders |
-| [docs/bugs/README.md](docs/bugs/README.md) | One folder per issue (repro, evidence, notes) |
-| [docs/SUBMISSION.md](docs/SUBMISSION.md) | Pre-push checklist and git instructions |
+| [docs/README.md](docs/README.md) | Sprint summary for graders |
+| [docs/bugs/README.md](docs/bugs/README.md) | Per-issue index (repro, evidence, notes) |
 
 ## Bugs addressed
 
