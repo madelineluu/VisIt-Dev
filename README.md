@@ -10,7 +10,7 @@ This repository is a personal fork of VisIt 3.4.0 with fixes and documentation f
 
 | Document | Purpose |
 |----------|---------|
-| [docs/README.md](docs/README.md) | Sprint summary for Hank |
+| [docs/README.md](docs/README.md) | Sprint summary |
 | [docs/bugs/README.md](docs/bugs/README.md) | Per-issue index (repro, evidence, notes) |
 
 ## Bugs addressed
@@ -24,7 +24,7 @@ This repository is a personal fork of VisIt 3.4.0 with fixes and documentation f
 
 ## Build and verify (local)
 
-1. Configure and build VisIt so `build/bin/run_visit` exists (same as your course build).
+1. Configure and build VisIt so `build/bin/run_visit` exists (same as the course build).
 2. Run all repro scripts:
 
 ```bash
