@@ -1,0 +1,540 @@
+#!/bin/bash
+
+# *****************************************************************************
+#   Script: build_visit
+#
+#   Purpose:
+#       A script that performs a complete build of VisIt and its support
+#       libraries.  The script will detect if support libraries have already
+#       been built and, if so, use those pre-built libraries.
+#
+#   Warning:
+#       This script is only expected to work for Linux, and Darwin systems.
+#
+#   Please visit https://visit-help.llnl.gov to send feedback if you run into
+#   problems so that this script can be improved in the future.
+#
+
+# To create your own modular file, see the docs at
+# //https://visit-sphinx-github-user-manual.readthedocs.io/en/develop/dev_manual/CreatingABuildVisItModule.html
+
+export VISIT_VERSION=${VISIT_VERSION:-"3.4.0"}
+
+####
+# Trunk:
+####
+#export TRUNK_BUILD="yes"
+#export RC_BUILD="no"
+#export TAGGED_BUILD="no"
+
+###
+# RC Branch:
+###
+#export TRUNK_BUILD="no"
+#export RC_BUILD="yes"
+#export TAGGED_BUILD="no"
+
+
+###
+# Tagged Release:
+###
+export TRUNK_BUILD="no"
+export RC_BUILD="no"
+export TAGGED_BUILD="yes"
+
+export INITIAL_PWD=$PWD
+
+#First step download the support directory from svn repository..
+export bv_PATH=`dirname $0`
+export bv_PREFIX=$bv_PATH/bv_support/
+
+# Two new version to support older versions of VisIt
+# exec-version gets the older version of the script and runs it..
+export build_version=""
+export webroot="http://visit.ilight.com/svn/visit/"
+export webaddr="${webroot}/trunk/src/tools/dev/scripts/bv_support/"
+export visitroot="https://github.com/visit-dav/visit/releases/download/"
+export thirdpartyroot="https://github.com/visit-dav/third-party/releases/download/"
+
+# for use when running a develop verison of build_visit
+export thirdpartyroot_dev="https://github.com/visit-dav/third-party/raw/master/lib"
+
+#state = "disabled", "enabled", "installed"
+declare -a reqlibs
+declare -a reqlibs_state
+declare -a optlibs
+declare -a optlibs_state
+declare -a grouplibs_name
+declare -a grouplibs_deps
+declare -a grouplibs_comment
+declare -a grouplibs_enabled
+declare -a defaultLicenses
+declare -a args
+
+function quick_check_for_help
+{
+    for arg in "$@";
+    do
+        if [[ "$arg" == "-h" || "$arg" == "--help" ]]; then
+            echo 0 # in sh, 0 return ==> ok
+            return
+        fi
+    done
+    echo 1 # in sh, non-zero return ==> not-ok
+}
+
+function check_for_versioning
+{
+    local next_arg="no"
+
+    for arg in "$@";
+    do
+        if [[ "$next_arg" == "build-version" ]]; then
+            build_version="$arg"
+            next_arg="no"
+        elif [[ "$arg" == "--build-version" ]]; then
+            next_arg="build-version"
+        else
+            args[${#args[*]}]="$arg"
+        fi
+    done
+
+    if [[ "$build_version" != "" ]]; then
+      VISIT_VERSION="$build_version"
+      webaddr="${webroot}/tags/$VISIT_VERSION/src/tools/dev/scripts/build_visit"
+      echo "using $webaddr for source"
+    fi
+}
+
+function configure_support_files
+{
+    if [ ! -d $bv_PREFIX ]; then
+        #check current directory
+        bv_PREFIX=$PWD/bv_support/
+
+        if [ ! -d $bv_PREFIX ]; then
+
+            for choice in `echo "curl wget svn"`
+            do
+                echo "Trying to fetch support files using: $choice"
+
+                tmp_choice=`which $choice`
+
+                if [ $? != 0 ]; then
+                    continue
+                fi
+                if [[ $choice == "curl" ]]; then
+                    tmp_curl=`curl -s ${webaddr}/ | grep 'sh\|xml' | grep li|sed s/.*bv_/bv_/g | sed -e s/\.sh.*/\.sh/g | sed -e s/.*href\=\"//g | sed -e s/\".*//g;`
+                    if [ $? != 0 ]; then
+                        continue
+                    fi
+
+                    mkdir -p bv_support_tmp
+                    is_successful=1
+                    #fetch each file..
+                    for curl_files in `echo $tmp_curl`
+                    do
+                        curl -s ${webaddr}/${curl_files} -o bv_support_tmp/$curl_files
+                        if [ $? != 0 ]; then
+                            echo "failed to download ${curl_files}"
+                            is_successful=0
+                            break
+                        fi
+                    done
+
+                    #if not successful cleanup and try next option..
+                    if [ $is_successful == 0 ]; then
+                        rm -fR bv_support_tmp
+                    else
+                        mv bv_support_tmp bv_support
+                    fi
+                elif [[ $choice == "wget" ]]; then
+                    wget -r -nH --cut-dirs=6 --no-parent --reject="index.html,robots.txt" -q ${webaddr}
+                else
+                    svn -q co ${webaddr} bv_support
+                fi
+
+                if [ ! -d $bv_PREFIX ]; then
+                    echo "$choice failed to retrieve support files"
+                else
+                    echo "Success. downloaded support, continuing"
+                    break
+                fi
+            done
+        fi
+
+        if [ ! -d $bv_PREFIX ]; then
+            echo "Failed to detect or fetch support files. Quitting..."
+            exit 2
+        fi
+    fi
+}
+
+function call_build_visit
+{
+    if [[ "${build_version}" == "" ]]; then
+        return
+    fi
+
+    build_visit_ver="build_visit${build_version}"
+
+    #previous one exists..
+    if [[ -e "$build_visit_ver" ]] ; then
+        # execute build_visit (exec should terminate current
+        # script for new one)
+        echo "Found $build_visit_ver"
+        exec bash $build_visit_ver "${args[@]}"
+    fi
+
+    for choice in `echo "curl wget svn"`
+    do
+        echo "Trying to fetch $build_visit_ver using: $choice"
+
+        tmp_choice=`which $choice`
+
+        if [ $? != 0 ]; then
+            continue
+        fi
+
+        if [[ $choice == "curl" ]]; then
+            curl -s ${webaddr} -o $build_visit_ver
+
+            if [ $? != 0 ]; then
+                continue
+            fi
+        elif [[ $choice == "wget" ]]; then
+            wget -q ${webaddr} -O $build_visit_ver
+
+            if [ $? != 0 ]; then
+                continue
+            fi
+        else
+            svn -q export ${webaddr} $build_visit_ver
+        fi
+
+        if [[ -e "$build_visit_ver" ]] ; then
+            echo "Success using $choice"
+            break;
+        fi
+    done
+
+    if [[ -e "$build_visit_ver" ]] ; then
+
+        if [[ -d bv_support ]]; then
+            echo "Removing previous support directory..."
+            rm -fR bv_support
+        fi
+
+        # have to inject a hack for versions older than 2.6.3
+        bv_PREFIX=$PWD/bv_support
+        webaddr="$webroot/tags/$build_version/src/tools/dev/scripts/bv_support/"
+        echo "rerouting support from $webaddr"
+        configure_support_files
+
+        declare -f download_file >> bv_support/helper_funcs.sh
+
+        # execute build_visit (exec should terminate current
+        # script for new one)
+        echo "Executing $build_visit_ver"
+        exec bash $build_visit_ver "${args[@]}"
+    else
+        echo "Failed to execute another version of VisIt"
+        exit 2
+    fi
+}
+
+
+#configure the support files if needed..
+configure_support_files
+
+#import initialize and run functions..
+. $bv_PREFIX/bv_main.sh
+
+#import helper functions..
+. $bv_PREFIX/helper_funcs.sh
+
+# Test a key version compare function there
+test_compare_version_strings
+
+#import visit
+. $bv_PREFIX/bv_visit.sh
+
+#These options can be read from a file..
+. $bv_PREFIX/bv_xml_parser.sh
+
+#read in the module file..
+readXmlModuleFile $bv_PREFIX/modules.xml
+
+if [[ $? == 0 ]] ; then
+    echo "Module file not read in properly"
+    exit 1
+fi
+
+defaultLicenses=$(xmlp_get_license "$@")
+
+for license in `echo $defaultLicenses`
+do
+    if [[ $(quick_check_for_help $@) -ne 0 ]]; then
+        info "Processing $license license."
+    fi
+
+    #read in contents for this license
+    parseXmlModuleContents $license
+
+    #copy xmlcontents to global variables
+    reqlibs=(`echo "${reqlibs[@]} ${xmlp_reqlibs[@]}" | xargs -n 1 | sort -u | xargs`)
+    optlibs=(`echo "${optlibs[@]} ${xmlp_optlibs[@]}" | xargs -n 1 | sort -u | xargs`)
+
+    for (( bv_i = 0; bv_i < ${#xmlp_grouplibs_name[*]}; ++bv_i ))
+    do
+        match=0
+
+        for (( bv_j = 0; bv_j < ${#grouplibs_name[*]}; ++bv_j ))
+        do
+            if [[ "${grouplibs_name[$bv_j]}" == "${xmlp_grouplibs_name[$bv_i]}" ]]; then
+                match=1
+                grouplibs_deps[$bv_j]=`echo "${grouplibs_deps[$bv_j]} ${xmlp_grouplibs_deps[$bv_i]}" | xargs -n 1 | sort -u | xargs`
+                break #break out of the loop
+            fi
+        done
+
+        if [[ match -eq 0 ]]; then
+            grouplibs_name[${#grouplibs_name[*]}]="${xmlp_grouplibs_name[$bv_i]}"
+            grouplibs_deps[${#grouplibs_deps[*]}]="${xmlp_grouplibs_deps[$bv_i]}"
+            grouplibs_comment[${#grouplibs_comment[*]}]="${xmlp_grouplibs_comment[$bv_i]}"
+            grouplibs_enabled[${#grouplibs_enabled[*]}]="${xmlp_grouplibs_enabled[$bv_i]}"
+        fi
+    done
+done
+
+
+#import functions that that install required visit libraries
+for (( i = 0; i < ${#reqlibs[*]}; ++i ))
+do
+    . "${bv_PREFIX}/bv_${reqlibs[$i]}.sh"
+    verify_required_module_exists ${reqlibs[$i]}
+done
+
+#import functions that support optional visit dependencies
+#import functions that that install required visit libraries
+for (( i = 0; i < ${#optlibs[*]}; ++i ))
+do
+    . "${bv_PREFIX}/bv_${optlibs[$i]}.sh"
+    verify_optional_module_exists ${optlibs[$i]}
+done
+
+
+###################### Grouping libraries
+# The arrays listed below help group VisIt's set of libraries.
+# For example: --all-io uses the iolibs array to determine which modules to enable
+#options = no change, enable, disable
+for (( bv_i=0; bv_i < ${#grouplibs_name[*]}; ++bv_i ))
+do
+    group_name=${grouplibs_name[$bv_i]}
+
+    for group_dep in `echo ${grouplibs_deps[$bv_i]}`;
+    do
+        #echo "checking $group_name and $group_dep"
+        if [[ "$group_dep" == no-* ]]; then
+            group_dep=${group_dep/no-}
+        fi
+        declare -F "bv_${group_dep}_enable" &>/dev/null
+
+        if [[ $? != 0 ]] ; then
+            error "library ${group_dep} in ${group_name} not valid"
+        fi
+
+        declare -F "bv_${group_dep}_disable" &>/dev/null
+
+        if [[ $? != 0 ]] ; then
+            error "library ${group_dep} in ${group_name} not valid"
+        fi
+    done
+
+done
+
+function check_default_args
+{
+    if [[ $(quick_check_for_help $@) -eq 0 ]]; then
+        usage
+        exit 2
+    fi
+
+    for arg in "$@";
+    do
+        if [[ "$arg" == "--write-unified-file" ]]; then
+            next_arg="write-unified-file"
+        elif [[ "$next_arg" == "write-unified-file" ]]; then
+            bv_write_unified_file "$arg"
+            exit 0
+        fi
+    done
+}
+function bv_write_unified_file
+{
+    OUTPUT_bv_FILE=$@
+
+    #
+    # Calculate the checksums for the visit tar file. They will be used
+    # in a sed command to add the checksums when bv_visit.sh is added to
+    # the output file.
+    #
+    tarfile="visit${VISIT_VERSION}.tar.gz"
+    md5sum=""
+    sha256sum=""
+    if [[ -f "$tarfile" ]]; then
+        if [[ $(type -P "md5sum") ]]; then
+            md5sum=`md5sum $tarfile | cut -d' ' -f 1`
+        else
+            echo "Warning md5sum is not in PATH, not adding md5sum for VisIt."
+        fi
+        if [[ $(type -P "sha256sum") ]]; then
+            sha256sum=`sha256sum $tarfile | cut -d' ' -f 1`
+        else
+            echo "Warning sha256sum is not in PATH, not adding sha256sum for VisIt."
+        fi
+    else
+        echo "Warning $tarfile doesn't exist, not adding checksums for VisIt."
+    fi
+
+    echo "Writing to File: $OUTPUT_bv_FILE"
+    #go up one directory so that if $bv_PREFIX was set to relative path it will work again..
+    if [[ $OUTPUT_bv_FILE == "" ]]; then
+        echo "Output file not given or proper. No "
+        return
+    fi
+
+    OLDPWD=$PWD
+    cd $INITIAL_PWD
+
+    echo "#!/bin/bash" > $OUTPUT_bv_FILE
+    echo "export VISIT_VERSION=\${VISIT_VERSION:-\"$VISIT_VERSION\"}" >> $OUTPUT_bv_FILE
+
+    echo "export TRUNK_BUILD=\"$TRUNK_BUILD\"" >> $OUTPUT_bv_FILE
+    echo "export RC_BUILD=\"$RC_BUILD\"" >> $OUTPUT_bv_FILE
+    echo "export TAGGED_BUILD=\"$TAGGED_BUILD\"" >> $OUTPUT_bv_FILE
+
+    echo "export INITIAL_PWD=\$PWD" >> $OUTPUT_bv_FILE
+
+    echo "export bv_PATH=`dirname \$0`" >> $OUTPUT_bv_FILE
+    echo "export bv_PREFIX=\$bv_PATH/bv_support/" >> $OUTPUT_bv_FILE
+
+    echo "export build_version=\"\"" >> $OUTPUT_bv_FILE
+    echo "export webroot=\"http://visit.ilight.com/svn/visit/\"" >> $OUTPUT_bv_FILE
+    echo "export webaddr=\"\${webroot}/trunk/src/tools/dev/scripts/bv_support/\"" >> $OUTPUT_bv_FILE
+    echo "export visitroot=\"https://github.com/visit-dav/visit/releases/download/\"" >> $OUTPUT_bv_FILE
+    echo "export thirdpartyroot=\"https://github.com/visit-dav/third-party/releases/download/\"" >> $OUTPUT_bv_FILE
+
+    # for use when running a develop verison of build_visit
+    echo "export thirdpartyroot_dev=\"https://github.com/visit-dav/third-party/raw/master/lib\"" >> $OUTPUT_bv_FILE
+
+    echo "declare -a reqlibs" >> $OUTPUT_bv_FILE
+    echo "declare -a optlibs" >> $OUTPUT_bv_FILE
+    echo "declare -a grouplibs_name" >> $OUTPUT_bv_FILE
+    echo "declare -a grouplibs_deps" >> $OUTPUT_bv_FILE
+    echo "declare -a grouplibs_comment" >> $OUTPUT_bv_FILE
+    echo "declare -a grouplibs_enabled" >> $OUTPUT_bv_FILE
+    echo "declare -a defaultLicenses" >> $OUTPUT_bv_FILE
+    echo "declare -a args" >> $OUTPUT_bv_FILE
+
+    declare -f quick_check_for_help >> $OUTPUT_bv_FILE
+    declare -f check_for_versioning >> $OUTPUT_bv_FILE
+    declare -f call_build_visit >> $OUTPUT_bv_FILE
+    declare -f configure_support_files >> $OUTPUT_bv_FILE
+
+    cat $bv_PREFIX/bv_main.sh >> $OUTPUT_bv_FILE
+    cat $bv_PREFIX/helper_funcs.sh >> $OUTPUT_bv_FILE
+    cat ${bv_PREFIX}/bv_xml_parser.sh >> $OUTPUT_bv_FILE
+    cat ${bv_PREFIX}/bv_visit.sh | sed "s/VISIT_MD5_CHECKSUM=\"\"/VISIT_MD5_CHECKSUM=\"$md5sum\"/" | sed "s/VISIT_SHA256_CHECKSUM=\"\"/VISIT_SHA256_CHECKSUM=\"$sha256sum\"/" >> $OUTPUT_bv_FILE
+
+    for (( i = 0; i < ${#xmlp_alllibs[*]}; ++i ))
+    do
+        cat "${bv_PREFIX}/bv_${xmlp_alllibs[$i]}.sh" >> $OUTPUT_bv_FILE
+    done
+
+    for (( i = 0; i < ${#xmlp_filecontents[*]}; ++i ))
+    do
+        echo "xmlp_filecontents[$i]=\"${xmlp_filecontents[$i]//\"/\\\"}\"" >> $OUTPUT_bv_FILE
+    done
+
+    for (( i = 0; i < ${#xmlp_licenses[*]}; ++i ))
+    do
+        #echo "xmlp_licenses[$i]=\"${xmlp_licenses[$i]//\|/\\\|}\"" >> $OUTPUT_bv_FILE
+        echo "xmlp_licenses[$i]=\"${xmlp_licenses[$i]}\"" >> $OUTPUT_bv_FILE
+        echo "xmlp_licenses_range[$i]=\"${xmlp_licenses_range[$i]}\"" >> $OUTPUT_bv_FILE
+    done
+
+    echo "defaultLicenses=\$(xmlp_get_license \"\$@\")" >> $OUTPUT_bv_FILE
+
+    echo "for license in \`echo \$defaultLicenses\`"  >> $OUTPUT_bv_FILE
+    echo "do" >> $OUTPUT_bv_FILE
+    echo "  info \"Processing \$license license.\"" >> $OUTPUT_bv_FILE
+    echo "  parseXmlModuleContents \$license" >> $OUTPUT_bv_FILE
+    echo "  reqlibs=(\`echo \"\${reqlibs[@]} \${xmlp_reqlibs[@]}\" | xargs -n 1 | sort -u | xargs\`)" >> $OUTPUT_bv_FILE
+    echo "  optlibs=(\`echo \"\${optlibs[@]} \${xmlp_optlibs[@]}\" | xargs -n 1 | sort -u | xargs\`)" >> $OUTPUT_bv_FILE
+
+    echo "for (( bv_i = 0; bv_i < \${#xmlp_grouplibs_name[*]}; ++bv_i ))" >> $OUTPUT_bv_FILE
+    echo "do" >> $OUTPUT_bv_FILE
+    echo "  match=0" >> $OUTPUT_bv_FILE
+    echo "  for (( bv_j = 0; bv_j < \${#grouplibs_name[*]}; ++bv_j ))" >> $OUTPUT_bv_FILE
+    echo "  do" >> $OUTPUT_bv_FILE
+    echo "    if [[ \"\${grouplibs_name[\$bv_j]}\" == \"\${xmlp_grouplibs_name[\$bv_i]}\" ]]; then" >> $OUTPUT_bv_FILE
+    echo "      match=1" >> $OUTPUT_bv_FILE
+    echo "      grouplibs_deps[\$bv_j]=\`echo \"\${grouplibs_deps[\$bv_j]} \${xmlp_grouplibs_deps[\$bv_i]}\" | xargs -n 1 | sort -u | xargs\`" >> $OUTPUT_bv_FILE
+    echo "      break" >> $OUTPUT_bv_FILE
+    echo "    fi" >> $OUTPUT_bv_FILE
+    echo "  done" >> $OUTPUT_bv_FILE
+    echo "  if [[ match -eq 0 ]]; then" >> $OUTPUT_bv_FILE
+    echo "    grouplibs_name[\${#grouplibs_name[*]}]=\"\${xmlp_grouplibs_name[\$bv_i]}\"" >> $OUTPUT_bv_FILE
+    echo "    grouplibs_deps[\${#grouplibs_deps[*]}]=\"\${xmlp_grouplibs_deps[\$bv_i]}\"" >> $OUTPUT_bv_FILE
+    echo "    grouplibs_comment[\${#grouplibs_comment[*]}]=\"\${xmlp_grouplibs_comment[\$bv_i]}\"" >> $OUTPUT_bv_FILE
+    echo "    grouplibs_enabled[\${#grouplibs_enabled[*]}]=\"\${xmlp_grouplibs_enabled[\$bv_i]}\"" >> $OUTPUT_bv_FILE
+    echo "  fi" >> $OUTPUT_bv_FILE
+    echo "  done" >> $OUTPUT_bv_FILE
+    echo "done" >> $OUTPUT_bv_FILE
+
+    declare -f check_default_args >> $OUTPUT_bv_FILE
+    echo "function bv_write_unified_file" >> $OUTPUT_bv_FILE
+    echo "{" >> $OUTPUT_bv_FILE
+    echo "  echo \"Writing to File: \$@\"" >> $OUTPUT_bv_FILE
+    echo "  cat \$0 > \$@" >> $OUTPUT_bv_FILE
+    echo "  cat \$0 > \$@" >> $OUTPUT_bv_FILE
+    echo "  chmod 755 \$@" >> $OUTPUT_bv_FILE
+    echo "}" >> $OUTPUT_bv_FILE
+
+    echo "check_for_versioning \"\$@\"" >> $OUTPUT_bv_FILE
+
+    echo "if [[ \"\$build_version\" != \"\" ]]; then" >> $OUTPUT_bv_FILE
+    echo "    call_build_visit" >> $OUTPUT_bv_FILE
+    echo "fi" >> $OUTPUT_bv_FILE
+
+    #echo "configure_support_files" >> $OUTPUT_bv_FILE
+
+    echo "check_default_args \"\$@\"" >> $OUTPUT_bv_FILE
+
+    #write command to run and execute VisIt
+    echo "initialize_build_visit \"\$@\"" >> $OUTPUT_bv_FILE
+    echo "run_build_visit \"\$@\"" >> $OUTPUT_bv_FILE
+    chmod 755 $OUTPUT_bv_FILE
+    cd $OLDPWD
+}
+
+# This code is meant to exercise support for building
+# older VisIt versions..
+check_for_versioning "$@"
+
+#jump to older version of build_visit if needed
+if [[ "$build_version" != "" ]]; then
+    call_build_visit
+fi
+
+#download and configure the support files if needed..
+configure_support_files
+
+check_default_args "$@"
+
+#initialize all build visit variables
+initialize_build_visit "$@"
+
+#run all build visit
+run_build_visit "$@"

@@ -1,0 +1,28 @@
+# Copyright (c) Lawrence Livermore National Security, LLC and other VisIt
+# Project developers.  See the top-level LICENSE file for dates and other
+# details.  No copyright assignment is required to contribute to VisIt.
+
+#
+# Example VisIt Python Query
+#
+class PythonMinQuery(SimplePythonQuery):
+    def __init__(self):
+        SimplePythonQuery.__init__(self)
+        self.name ="PythonMinQuery"
+        self.description = "Calc Min"
+    def pre_execute(self):
+        self.vmin = 1e37
+    def execute_chunk(self,ds_in,domain_id):
+        ncells = ds_in.GetNumberOfCells()
+        if ncells > 0:
+            varr = ds_in.GetCellData().GetArray(self.input_var_names[0])
+            vals = [varr.GetTuple1(i) for i in range(ncells)]
+            cmin = min(vals)
+            self.vmin = min(self.vmin,cmin)
+    def post_execute(self):
+        res = mpicom.min(self.vmin)
+        if mpicom.rank() == 0:
+            self.set_result_value(res)
+            self.set_result_text("Min = %s" % str(res))
+
+py_filter = PythonMinQuery

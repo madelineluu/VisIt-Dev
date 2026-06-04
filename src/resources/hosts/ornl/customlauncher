@@ -1,0 +1,145 @@
+###############################################################################
+# Class: JobSubmitter_bsub_ORNL
+#
+# Purpose:    Custom "bsub" job submitter for ORNL
+#
+# Programmer: Eric Brugger
+# Date:       Wed Jul 31 11:18:36 PDT 2019
+#
+# Modifications
+#  Dave Pugmire, Tue August 6 2019
+#  Alterations for summit
+#  James Kress, Wed Sep 25 15:13:30 PDT 2019
+#  Update tfile setup to source the correct files at OLCF to setup user env
+#
+###############################################################################
+
+class JobSubmitter_bsub_ORNL(JobSubmitter):
+    def __init__(self, launcher):
+        super(JobSubmitter_bsub_ORNL, self).__init__(launcher)
+
+    def CreateFilename(self):
+        tdate = time.asctime()[11:19]
+        tuser = self.launcher.username()
+        return os.path.join("/tmp", "visit.%s.%s" % (tuser, tdate))
+
+    def TFileSetup(self, tfile):
+        #print >> sys.stderr, 'TFileSetup', tfile
+        super(JobSubmitter_bsub_ORNL, self).TFileSetup(tfile)
+        return
+
+    def TFileLoadModules(self, tfile):
+        #print >> sys.stderr,  'Loading modules for summit'
+        tfile.write("source /etc/profile.d/olcf-env.sh\n")
+        tfile.write("source /etc/profile.d/lsf.sh\n")
+        #tfile.write("echo \"Evaluating ORNL tfile before launching visit\"\n")
+        tfile.write("module load DefApps\n")
+        #print >>sys.stderr, 'creating tfile!', tfile
+
+    def CreateCommand(self, args, debugger):
+        bsub, sublauncher = self.LauncherAndSubLauncher()
+
+        # Create the tfile name
+        self.tfilename = self.CreateFilename()
+
+        parcmd = ["bsub"]
+        parcmd = parcmd + self.Executable()
+        if self.parallel.launchargs != None:
+            parcmd = parcmd + self.parallel.launchargs
+        if self.parallel.np != None:
+            parcmd = parcmd + ["-nnodes", self.parallel.nn]
+        if self.parallel.partition != None:
+            parcmd = parcmd + ["-q", self.parallel.partition]
+        if self.parallel.time != None:
+            parcmd = parcmd + ["-W", self.parallel.time]
+        if self.parallel.bank != None:
+           parcmd = parcmd + ["-P", self.parallel.bank]
+        nodes = self.parallel.nn
+        if nodes == None:
+            nodes = self.parallel.np
+        parcmd = parcmd + ["-J", self.tfilename]
+
+        ppn = str(int(math.ceil(float(self.parallel.np) / float(nodes))))
+        parcmd = parcmd + ["jsrun"]
+        parcmd = parcmd + ["--np", self.parallel.np]
+        parcmd = parcmd + ["--nrs", self.parallel.nn]
+        parcmd = parcmd + ["-c", "ALL_CPUS", "-g", "ALL_GPUS"]
+        parcmd = parcmd + ["-d", "plane:%s" % ppn]
+        if self.parallel.sublaunchargs != None:
+            parcmd = parcmd + self.parallel.sublaunchargs
+        parcmd = parcmd + self.VisItExecutable()
+        parcmd = parcmd + ["-plugindir", GETENV("VISITPLUGINDIR")]
+        parcmd = parcmd + ["-visithome", GETENV("VISITHOME")]
+        parcmd = parcmd + ["-visitarchhome", GETENV("VISITARCHHOME")]
+        parcmd = parcmd + args
+        parcmd = debugger.CreateCommand(parcmd)
+
+        # Create the tfile
+        try:
+            tfile = open(self.tfilename, "wt")
+            tfile.write("#!/usr/bin/bash -l\n")
+            self.TFileLoadModules(tfile)
+            #self.TFileSetup(tfile)
+            tfile.write(" ".join(parcmd))
+            tfile.close()
+            os.chmod(self.tfilename, 0o775)
+        except (OSError, IOError):
+            exit("Could not create ORNL script file to launch %s job." % self.parallel.launcher, 0)
+
+        myCMD = [self.tfilename]
+        return myCMD
+
+
+###############################################################################
+# Class: ORNLLauncher
+#
+# Purpose:    Custom launcher for ORNL
+#
+# Programmer: Brad Whitlock
+# Date:       Thu May 17 14:22:04 PDT 2012
+#
+# Modifications:
+#
+###############################################################################
+
+class ORNLLauncher(MainLauncher):
+    def __init__(self):
+        super(ORNLLauncher, self).__init__()
+        self.summit = -1
+        self.andes = -1
+
+    def IsRunningOnAndes(self):
+        if self.andes == -1:
+           self.andes = 0
+           if self.parallelArgs.parallel and \
+              self.sectorname().startswith("andes-") and \
+              self.domainname() == "olcf.ornl.gov":
+              self.andes = 1
+        return self.andes
+
+    def IsRunningOnSummit(self):
+        if self.summit == -1:
+           self.summit = 0
+           if self.parallelArgs.parallel and \
+              self.sectorname().startswith("login") and \
+              self.domainname() == "summit.olcf.ornl.gov":
+              self.summit = 1
+        return self.summit
+
+    def PrivatePlugins(self):
+        return super(ORNLLauncher, self).PrivatePlugins()
+
+    #
+    # Override the JobSubmitterFactory method so the custom job submitter can
+    # be returned.
+    #
+    def JobSubmitterFactory(self, launch):
+        #print 'JobSubmitterFactory: ', launch, self.sectorname(), self.domainname()
+        if launch[:4] == "bsub":
+            if self.domainname() == "summit.olcf.ornl.gov":
+                return JobSubmitter_bsub_ORNL(self)
+        return super(ORNLLauncher, self).JobSubmitterFactory(launch)
+
+# Launcher creation function
+def createlauncher():
+    return ORNLLauncher()

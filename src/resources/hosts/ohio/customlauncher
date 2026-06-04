@@ -1,0 +1,36 @@
+###############################################################################
+# Class: OSCLauncher
+#
+# Purpose:    Custom launcher for Ohio Supercomputer Center
+# Programmer: Kevin Manalo
+# Date:       Tues Nov 1 2016
+#
+# Customization issues:
+#    1) Exposure of locally related PATH and LD_LIBRARY_PATH by using Lmod
+#    2) Absolute path for qsub
+#    3) Bypass PPNArgument and favor Argonne mpiexec
+#    4) PBS_HOME needs to be set for the OSC submitfilter to work
+#    5) Only Cluster Currently Supported is Owens
+#
+# Thanks to Allen Sanderson for the help!
+#
+# Modifications:
+#   Zhi-Qiang You, Wed Oct 7 2021
+#   1) Remove PBS implementation and use internal launcher.
+###############################################################################
+
+class OSCLauncher(MainLauncher):
+    def __init__(self):
+        super(OSCLauncher, self).__init__()
+
+    def Customize(self):
+        msg = """ Ohio Supercomputer Center - Custom Launch File \n"""
+        print msg
+
+    def JobSubmitterFactory(self, launch):
+        return super(OSCLauncher, self).JobSubmitterFactory(launch)
+
+
+# Launcher creation function
+def createlauncher():
+    return OSCLauncher()

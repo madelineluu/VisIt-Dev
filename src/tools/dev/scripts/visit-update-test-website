@@ -1,0 +1,55 @@
+#!/bin/sh
+
+cd /usr/workspace/wsa/visit/dashboard/dashboard
+
+# update top-level index.html file
+rm -f index.html
+echo "<html><head><title>VisIt Regression Results</title></head><body bgcolor=\"#a0a0f0\">" > index.html
+echo "<H1>Results of VisIt Regression Tests</H1>" >> index.html
+echo "<table border>" >> index.html
+echo "<tr>" >> index.html
+echo "   <td><b>Timestamp</b></td>" >> index.html
+echo "   <td><b>Mode</b></td>" >> index.html
+echo "   <td><b>Result</b></td>" >> index.html
+echo "</tr>" >> index.html
+
+ls -1t /usr/workspace/wsa/visit/dashboard/dashboard/*/*/index.html | while read testLine; do
+
+    theMode=`echo $testLine | cut -d'/' -f9`
+    theRelDir=`echo $testLine | cut -d'/' -f8-`
+    theRelDir="./${theRelDir}"
+    theTimeStamp=`echo $testLine | cut -d'/' -f8`
+    theYear=`echo $theTimeStamp | cut -d'-' -f1`
+    f2=`echo $theTimeStamp | cut -d'-' -f2`
+    theDay=`echo $theTimeStamp | cut -d'-' -f3`
+    theTime=`echo $theTimeStamp | cut -d'-' -f4`
+    theDate="$theYear-$f2-$theDay"
+    theWeekDay=$(date -d $theDate +%A)
+    theMonth=$(date -d $theDate +%B)
+
+    echo "<tr>" >> index.html
+    echo "<td>${theWeekDay}, ${theMonth} ${theDay}, ${theYear} ${theTime}</td>" >> index.html
+    echo "<td><a href=\"${theRelDir}\">${theMode}</a></td>" >> index.html
+
+    hasFailed=`grep -m 1 Failed $testLine 2>/dev/null`
+    if test "$hasFailed" = ""; then
+        hasFailed=`grep -m 1 Unacceptable $testLine 2>/dev/null`
+    fi
+    if test "$hasFailed" = ""; then
+        hasFailed=`grep -m 1 OS-Killed $testLine 2>/dev/null`
+    fi
+    hasSkips=`grep -m 1 Skipped $testLine 2>/dev/null`
+    if test "$hasFailed" = ""; then
+        if test "$hasSkips" = ""; then
+            echo "<td bgcolor="#00ff00"><b>Passed</b></td>" >> index.html
+        else
+            echo "<td bgcolor="#00ff00"><b>Passed w/Skips</b></td>" >>index.html
+        fi
+    else
+        echo "<td bgcolor="#ff0000"><b>Failed</b></td>" >> index.html
+    fi
+    echo "</tr>" >> index.html
+done
+
+chgrp visit index.html
+chmod g+rwX,o+rX index.html

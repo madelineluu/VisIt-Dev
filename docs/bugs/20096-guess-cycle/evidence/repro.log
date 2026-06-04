@@ -1,0 +1,13 @@
+Running: cli -dv -nowin -s /home/users/mluu/uoregon-cs510-scivis/project6/visit3.4.0/docs/bugs/20096-guess-cycle/repro/bug_20096.py
+Running: viewer -dv -nowin -noint -host 127.0.0.1 -port 5600
+Running: mdserver -dv -host 127.0.0.1 -port 5600
+VisIt: Message - VisIt closed "localhost:/home/users/mluu/uoregon-cs510-scivis/project6/visit3.4.0/docs/bugs/20096-guess-cycle/repro/output/bug20096_series.visit".
+Running: engine_ser -dv -host 127.0.0.1 -port 5600
+======================================================================
+VisIt #20096 - cycle-from-filename for the first state in a series
+======================================================================
+Expected cycles : [100, 200, 300]
+Reported cycles : [100, 200, 300]
+----------------------------------------------------------------------
+RESULT: PASS - every state reports its filename cycle (#20096 fixed)
+======================================================================

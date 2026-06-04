@@ -1,0 +1,5 @@
+utf-8                   PASS  curves=['curve_a', 'curve_b']
+utf-8-with-bom          PASS  curves=['curve_a', 'curve_b']
+utf-16-le-with-bom      PASS  curves=['curve_a', 'curve_b']
+utf-16-be-with-bom      PASS  curves=['curve_a', 'curve_b']
+RESULT: all variants opened correctly -- bug #18516 is fixed

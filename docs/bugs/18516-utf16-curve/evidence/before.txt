@@ -1,0 +1,5 @@
+utf-8                   PASS  curves=['curve_a', 'curve_b']
+utf-8-with-bom          FAIL  curves=[]
+utf-16-le-with-bom      FAIL  curves=[]
+utf-16-be-with-bom      FAIL  curves=[]
+RESULT: at least one variant failed -- bug #18516 is present

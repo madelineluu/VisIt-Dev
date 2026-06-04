@@ -1,0 +1,336 @@
+###############################################################################
+# Class: JobSubmitter_qsub_LLNL
+#
+# Purpose:    Custom "qsub" job submitter for LLNL.
+#
+# Programmer: Brad Whitlock
+# Date:       Thu May 17 14:22:04 PDT 2012
+#
+# Modifications:
+#   Eric Brugger, Tue Oct 18 16:38:04 PDT 2016
+#   I modified the script to set ppn when running on trinity.
+#
+#   Eric Brugger, Thu Dec 29 13:12:25 PST 2016
+#   I modified the script to set ttc when running on agate.
+#
+#   Eric Brugger, Mon Jan  9 13:43:22 PST 2017
+#   I modified the script to no longer set usettc when on inca.
+#
+#   Eric Brugger, Thu Mar 29 08:32:40 PDT 2018
+#   I modified the script to set ttc when running on rztrona.
+#
+###############################################################################
+
+class JobSubmitter_qsub_LLNL(JobSubmitter_qsub):
+    def __init__(self, launcher):
+        super(JobSubmitter_qsub_LLNL, self).__init__(launcher)
+        self.usettc = self.sectorname() in ("agate", "borax", "rzalastor", "rztrona")
+        self.useppn = (self.sectorname() == "graph") or (self.sectorname() == "tr-fe")
+
+###############################################################################
+# Class: JobSubmitter_mpirun_LLNL
+#
+# Purpose:    Custom "mpirun" job submitter for LLNL.
+#
+# Programmer: Eric Brugger
+# Date:       Thu Feb 15 09:38:48 PST 2018
+#
+###############################################################################
+
+class JobSubmitter_mpirun_LLNL(JobSubmitter_mpirun):
+    def __init__(self, launcher):
+        super(JobSubmitter_mpirun_LLNL, self).__init__(launcher)
+
+    def Executable(self):
+        if self.sectorname() in ("quartz", "borax"):
+            return ["/usr/tce/packages/openmpi/openmpi-2.1.0-gcc-4.9.3/bin/mpirun"]
+        return super(JobSubmitter_mpirun_LLNL, self).Executable()
+
+###############################################################################
+# Class: JobSubmitter_bsub_LLNL
+#
+# Purpose:    Custom "bsub" job submitter for LLNL.
+#
+# Programmer: Eric Brugger
+# Date:       Fri Nov 30 14:15:23 PST 2018
+#
+# Modifications:
+#   Eric Brugger, Thu Jun  6 09:14:50 PDT 2019
+#   I modified the bsub internal launcher as directed by John Gyllenhaal.
+#   I also set some LFS environment variables that weren't being set for
+#   Jose Milovich.
+#
+#   Eric Brugger, Thu Sep 19 09:30:11 PDT 2019
+#   I modified the bsub internal launcher to set the environment variables
+#   as part of bsub command to get around a bug on rzansel where the
+#   environment variables are not getting passed by bsub.
+#
+#   Eric Brugger, Thu Feb 13 15:02:05 PST 2020
+#   I tweeked the setting of the environment variables as part of the bsub
+#   command.
+#
+###############################################################################
+
+class JobSubmitter_bsub_LLNL(JobSubmitter):
+    def __init__(self, launcher):
+        super(JobSubmitter_bsub_LLNL, self).__init__(launcher)
+
+    def Executable(self):
+        return ["/usr/tcetmp/bin/bsub"]
+
+    def CreateCommand(self, args, debugger):
+        bsub, sublauncher = self.LauncherAndSubLauncher()
+        parcmd = ["env", "LSF_BINDIR=/opt/ibm/spectrumcomputing/lsf/10.1/linux3.10-glibc2.17-ppc64le-csm/bin"]
+        parcmd = parcmd + ["LSF_CONFDIR=/opt/ibm/spectrumcomputing/lsf/conf"]
+        parcmd = parcmd + ["LSF_ENVDIR=/opt/ibm/spectrumcomputing/lsf/conf"]
+        parcmd = parcmd + ["LSF_LIBDIR=/opt/ibm/spectrumcomputing/lsf/10.1/linux3.10-glibc2.17-ppc64le-csm/lib"]
+        parcmd = parcmd + ["LSF_SERVERDIR=/opt/ibm/spectrumcomputing/lsf/10.1/linux3.10-glibc2.17-ppc64le-csm/etc"]
+        parcmd = parcmd + ["XLSF_UIDDIR=/opt/ibm/spectrumcomputing/lsf/10.1/linux3.10-glibc2.17-ppc64le-csm/lib/uid"]
+        parcmd = parcmd + ["/usr/tcetmp/bin/bsub"]
+        parcmd = parcmd + ["-core_isolation", "2"]
+        if self.parallel.launchargs != None:
+            parcmd = parcmd + self.parallel.launchargs
+        if self.parallel.np != None:
+            parcmd = parcmd + ["-nnodes", self.parallel.nn]
+        if self.parallel.partition != None:
+            parcmd = parcmd + ["-q", self.parallel.partition]
+        if self.parallel.time != None:
+            parcmd = parcmd + ["-W", self.parallel.time]
+        if self.parallel.bank != None:
+            parcmd = parcmd + ["-G", self.parallel.bank]
+        nodes = self.parallel.nn
+        if nodes == None:
+            nodes = self.parallel.np
+        ppn = str(int(math.ceil(float(self.parallel.np) / float(nodes))))
+        parcmd = parcmd + ["env", "LD_LIBRARY_PATH=%s" % GETENV("LD_LIBRARY_PATH")]
+        parcmd = parcmd + ["/usr/tce/packages/jsrun/jsrun-2019.05.02/bin/jsrun"]
+        parcmd = parcmd + ["--np", self.parallel.np]
+        parcmd = parcmd + ["--nrs", self.parallel.nn]
+        parcmd = parcmd + ["-c", "ALL_CPUS", "-g", "ALL_GPUS"]
+        parcmd = parcmd + ["-d", "plane:%s" % ppn]
+        parcmd = parcmd + ["-b", "none", "-X", "1", "/usr/tce/packages/lrun/lrun-2019.05.07/bin/mpibind10"]
+        if self.parallel.sublaunchargs != None:
+            parcmd = parcmd + self.parallel.sublaunchargs
+        parcmd = parcmd + self.VisItExecutable()
+        parcmd = parcmd + ["-plugindir", GETENV("VISITPLUGINDIR")]
+        parcmd = parcmd + ["-visithome", GETENV("VISITHOME")]
+        parcmd = parcmd + ["-visitarchhome", GETENV("VISITARCHHOME")]
+        parcmd = parcmd + args
+        parcmd = debugger.CreateCommand(parcmd)
+        return parcmd
+
+###############################################################################
+# Class: LLNLLauncher
+#
+# Purpose:    Custom launcher for LLNL
+#
+# Programmer: Brad Whitlock
+# Date:       Thu May 17 14:22:04 PDT 2012
+#
+# Modifications:
+#   Eric Brugger, Mon Nov 19 12:04:57 PST 2012
+#   I modified the script to add some paths to the LD_LIBRARY_PATH if running
+#   on cielo.
+#
+#   Eric Brugger, Tue Nov 20 11:25:07 PST 2012
+#   I removed the DetermineArchitecture method, which launched a chaos 4
+#   version on some machines. Those machines are either retired or have been
+#   upgraded to chaos 5.
+#
+#   Brad Whitlock, Wed Jun  5 16:24:26 PDT 2013
+#   Special handling of networking arguments for BG/Q.
+#
+#   Cyrus Harrison, Tue Aug 23 08:21:12 PDT 2016
+#   Added check for sequioa (seqlac)
+#
+#   Eric Brugger, Thu Jan 19 14:51:03 PST 2017
+#   I added code to map login node names on jade and agate to their IP
+#   addresses since they aren't in DNS.
+#
+#   Eric Brugger, Wed Mar 22 13:43:49 PDT 2017
+#   I added the MPI library paths to the LD_LIBRARY_PATH for borax, quartz,
+#   rzgenie and rztrona.
+#
+#   Eric Brugger, Thu Jun 15 11:44:37 PDT 2017
+#   I added the MPI library paths to the LD_LIBRARY_PATH for rztopaz.
+#
+#   Eric Brugger, Wed Mar 22 14:17:24 PDT 2017
+#   I added the MPI library paths to the LD_LIBRARY_PATH for jade and agate.
+#   I removed the logic that sets the LD_LIBRARY_PATH if running on cielo.
+#
+#   Eric Brugger, Mon Mar 19 12:55:14 PDT 2018
+#   I set visitarch to linux-x86_64-toss3 for all the toss3 machines.
+#
+#   Eric Brugger, Mon Apr 30 09:18:14 PDT 2018
+#   I added rzhasgpu to the list of toss3 machines.
+#
+#   Eric Brugger, Fri May 25 11:55:08 PDT 2018
+#   I added pascal to the list of toss3 machines.
+#
+#   Cyrus Harrison, Wed Jun 27 12:41:03 PDT 2018
+#   I added catalyst to the list of toss3 machines.
+#
+#   Eric Brugger, Thu Jul 26 13:48:28 PDT 2018
+#   I added surface to the list of toss3 machines.
+#
+#   Eric Brugger, Fri Aug 17 16:04:16 PDT 2018
+#   I added syrah to the list of toss3 machines.
+#
+#   Eric Brugger, Thu Aug 30 12:27:37 PDT 2018
+#   I added max to the list of toss3 machines.
+#
+#   Eric Brugger, Thu Nov  8 15:44:54 PST 2018
+#   I added rzalastor and zin to the list of toss3 machines.
+#
+#   Eric Brugger, Fri Nov 30 14:15:23 PST 2018
+#   I modified the launcher to use a custom launcher on lassen and sierra.
+#
+#   Eric Brugger, Wed Dec 12 11:54:00 PST 2018
+#   I added pinot, rzansel and rzslic to the list of toss3 machines.
+#
+#   Eric Brugger, Tue Dec 18 14:32:09 PST 2018
+#   I added czvnc and rzvnc to the list of toss3 machines.
+#
+#   Eric Brugger, Fri Nov 30 14:15:23 PST 2018
+#   I removed rzansel from the list of toss3 machines. I modified the
+#   launcher to use a custom launcher on rzansel.
+#
+#   Eric Brugger, Fri Jun 14 10:39:30 PDT 2019
+#   I added cmax to the list of toss3 machines.
+#
+#   Eric Brugger, Thu Sep 26 17:19:10 PDT 2019
+#   I removed the logic for setting the visitarch to "linux-x86_64-toss3"
+#   on toss3 systems. I removed the logic for hoth.
+#
+#   Eric Brugger, Mon Oct 12 13:49:41 PDT 2020
+#   Add code to unsetenv LD_PRELOAD to protect against users setting
+#   it for the GL library, which would break rendering.
+#
+#   Cyrus Harrison, Fri Dec 11 09:34:38 PST 2020
+#   Python 3 port (avoid using old string methods)
+#
+#   Eric Brugger, Wed Feb  3 16:49:58 PST 2021
+#   Added code to set the LD_LIBRARY_PATH on trinity to include the
+#   directory with the standard C++ library used by the compiler used
+#   to compile visit.
+#
+#   Cyrus Harrison, Mon Jun  7 09:53:53 PDT 2021
+#   Python 3 universal_newlines for Popen
+#
+#   Eric Brugger, Wed Jun  8 10:30:35 PDT 2022
+#   Added logic to set the LD_LIBRARY_PATH appropriately for MPI on toss3
+#   and toss4 x86_64 systems.
+#
+#   Eric Brugger, Fri Feb 17 14:33:43 PST 2023
+#   Added logic to set the visitarch appropriately on toss4 x86_64 systems.
+#
+###############################################################################
+
+class LLNLLauncher(MainLauncher):
+    def __init__(self):
+        super(LLNLLauncher, self).__init__()
+
+    # Get the IP address for eth0.
+    def GetIPAddress(self):
+        p = subprocess.Popen(["/sbin/ifconfig"],
+                             universal_newlines=True,
+                             stdin=subprocess.PIPE,
+                             stderr=subprocess.PIPE,
+                             stdout=subprocess.PIPE)
+        output = p.communicate()
+        iplines = [x for x in output[0].split("\n") if x.find("inet addr") != -1]
+        start = iplines[0].find("inet addr")
+        end = iplines[0].find("Bcast:")
+        IP = iplines[0][start + 10:end].replace(" ", "")
+        return IP
+
+    def Customize(self):
+        #
+        # BG/Q networking changes for parallel engine. We override the host
+        # with an IP address.
+        #
+        if self.parallelArgs.parallel and \
+           (self.generalArgs.exe_name.find("_par") != -1 or \
+            self.generalArgs.exe_name.find("_ser") != -1):
+            if self.sectorname() == "vulcanlac" or \
+               self.sectorname() == "rzuseqlac" or \
+               self.sectorname() == "seqlac":
+                self.generalArgs.host = self.GetIPAddress()
+                self.generalArgs.guesshost = 0
+                self.generalArgs.sshtunneling = 0
+                self.generalArgs.noloopback = 1
+
+        #
+        # Convert the host name to the ip address on jade.
+        #
+        if self.generalArgs.host == "jade188.llnl.gov":
+            self.generalArgs.host = "130.106.201.19"
+        elif self.generalArgs.host == "jade380.llnl.gov":
+            self.generalArgs.host = "130.106.201.20"
+        elif self.generalArgs.host == "jade386.llnl.gov":
+            self.generalArgs.host = "130.106.201.57"
+        elif self.generalArgs.host == "jade764.llnl.gov":
+            self.generalArgs.host = "130.106.201.58"
+        elif self.generalArgs.host == "jade770.llnl.gov":
+            self.generalArgs.host = "130.106.201.59"
+        elif self.generalArgs.host == "jade962.llnl.gov":
+            self.generalArgs.host = "130.106.201.60"
+        elif self.generalArgs.host == "agate2.llnl.gov":
+            self.generalArgs.host = "130.106.204.1"
+        elif self.generalArgs.host == "agate5.llnl.gov":
+            self.generalArgs.host = "130.106.204.3"
+
+        #
+        # Set the LD_LIBRARY_PATH on trinity to include the directory
+        # with the standard C++ library used by the compiler used to
+        # compile visit.
+        #
+        if self.sectorname() == "tr-fe" or self.sectorname() == "nid":
+            ld_library_path = GETENV("LD_LIBRARY_PATH")
+            new_ld_library_path = self.joinpaths(["/opt/gcc/9.3.0/snos/lib64", ld_library_path])
+            SETENV("LD_LIBRARY_PATH", new_ld_library_path)
+
+        #
+        # Set the LD_LIBRARY_PATH to include the path to MPI on toss3 or
+        # toss4 x86_64 systems.
+        #
+        sys_type = GETENV("SYS_TYPE")
+        if sys_type == "toss_3_x86_64" or sys_type == "toss_3_x86_64_ib":
+            mpi_ld_library_paths = ["/usr/tce/packages/mvapich2/mvapich2-2.2-intel-16.0.3/lib", "/usr/tce/packages/intel/intel-16.0.3/lib/intel64"]
+            SETENV("LD_LIBRARY_PATH", self.joinpaths(mpi_ld_library_paths))
+        elif sys_type == "toss_4_x86_64" or sys_type == "toss_4_x86_64_ib":
+            mpi_ld_library_paths = ["/usr/tce/packages/mvapich2-tce/mvapich2-2.3.6-gcc-10.3.1/lib"]
+            SETENV("LD_LIBRARY_PATH", self.joinpaths(mpi_ld_library_paths))
+
+        # Unset LD_PRELOAD
+        UNSETENV("LD_PRELOAD")
+
+        #
+        # Set the visitarch to linux-x86_64-toss4 if the kernel version
+        # starts with "4" and processor type is "x86_64".
+        #
+        kernel = subprocess.run(['uname', '-r'], stdout=subprocess.PIPE)
+        proc = subprocess.run(['uname', '-p'], stdout=subprocess.PIPE)
+        if proc.stdout.decode('utf-8')[:6] == "x86_64" and \
+           kernel.stdout.decode('utf-8')[:1] == "4":
+            self.visitarch = "linux-x86_64-toss4"
+
+    #
+    # Override the JobSubmitterFactory method so the custom job submitter can
+    # be returned.
+    #
+    def JobSubmitterFactory(self, launch):
+        if launch[:4] == "qsub" or launch[:4] == "msub":
+            return JobSubmitter_qsub_LLNL(self)
+        elif launch[:6] == "mpirun":
+            return JobSubmitter_mpirun_LLNL(self)
+        elif launch[:4] == "bsub":
+            if self.sectorname() == "lassen" or \
+                self.sectorname() == "rzansel" or \
+                self.sectorname() == "sierra":
+                return JobSubmitter_bsub_LLNL(self)
+        return super(LLNLLauncher, self).JobSubmitterFactory(launch)
+
+# Launcher creation function
+def createlauncher():
+    return LLNLLauncher()

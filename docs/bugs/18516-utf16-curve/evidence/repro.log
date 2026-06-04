@@ -1,0 +1,13 @@
+Running: cli -dv -nowin -s /home/users/mluu/uoregon-cs510-scivis/project6/visit3.4.0/docs/bugs/18516-utf16-curve/repro/bug_18516.py
+Running: viewer -dv -nowin -noint -host 127.0.0.1 -port 5600
+Running: mdserver -dv -host 127.0.0.1 -port 5600
+Running: engine_ser -dv -host 127.0.0.1 -port 5600
+VisIt: Message - VisIt closed "localhost:/home/users/mluu/uoregon-cs510-scivis/project6/visit3.4.0/docs/bugs/18516-utf16-curve/repro/output/bug_18516_utf8.ultra".
+VisIt: Message - VisIt closed "localhost:/home/users/mluu/uoregon-cs510-scivis/project6/visit3.4.0/docs/bugs/18516-utf16-curve/repro/output/bug_18516_utf8_bom.ultra".
+VisIt: Message - VisIt closed "localhost:/home/users/mluu/uoregon-cs510-scivis/project6/visit3.4.0/docs/bugs/18516-utf16-curve/repro/output/bug_18516_utf16le.ultra".
+VisIt: Message - VisIt closed "localhost:/home/users/mluu/uoregon-cs510-scivis/project6/visit3.4.0/docs/bugs/18516-utf16-curve/repro/output/bug_18516_utf16be.ultra".
+utf-8                   PASS  curves=['curve_a', 'curve_b']
+utf-8-with-bom          PASS  curves=['curve_a', 'curve_b']
+utf-16-le-with-bom      PASS  curves=['curve_a', 'curve_b']
+utf-16-be-with-bom      PASS  curves=['curve_a', 'curve_b']
+RESULT: all variants opened correctly -- bug #18516 is fixed

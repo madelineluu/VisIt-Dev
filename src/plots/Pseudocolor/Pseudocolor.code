@@ -1,0 +1,244 @@
+Target: xml2atts
+Function: ChangesRequireRecalculation
+Declaration: bool ChangesRequireRecalculation(const PseudocolorAttributes &) const;
+Definition:
+// ****************************************************************************
+// Modifications:
+//
+//   Kathleen Bonnell, Fri Aug 31 08:50:30 PDT 2001
+//   Only centering changes require the plot to be recalculated.
+//   Removed scaling, pointsize and skewFactor from test.
+//
+//   Hank Childs, Sun Jun 23 23:54:56 PDT 2002
+//   Also recalculate if the point size changes.
+//
+//   Jeremy Meredith, Mon Dec  9 16:30:54 PST 2002
+//   Added smoothing level.
+//
+//   Jeremy Meredith, Fri Dec 20 11:33:43 PST 2002
+//   Added point size variable and its enabled flag.
+//
+//   Hank Childs, Thu Aug 21 22:28:25 PDT 2003
+//   Added pointType.
+//
+//   Kathleen Bonnell, Wed Aug 18 18:08:52 PDT 2004
+//   Removed pointSize, pointType from test.  Added new conditions for
+//   recalculation when pointSizeVar or pointSizeVarEnabled have changed.
+//
+//   Kathleen Bonnell, Fri Nov 12 11:11:41 PST 2004
+//   Modified determination of when secondary var requires recalc.
+//
+//   Eric Brugger, Wed Oct 26 09:36:37 PDT 2016
+//   I modified the plot to support independently setting the point style
+//   for the two end points of lines.
+//
+//   Alister Maguire, Tue Jul 16 11:00:45 PDT 2019
+//   I added a check to see if transparency is allowed.
+//
+//   Kathleen Biagas, Tue Nov  5 08:23:09 PST 2019
+//   Added check for certain pointType changes.
+//
+// ****************************************************************************
+bool
+PseudocolorAttributes::ChangesRequireRecalculation(const PseudocolorAttributes &obj) const
+{
+   bool needSecondaryVar = (obj.pointType != Point &&
+                            obj.pointType != Sphere &&
+                            obj.pointSizeVarEnabled &&
+                            obj.pointSizeVar != pointSizeVar &&
+                            obj.pointSizeVar != "default" &&
+                            obj.pointSizeVar != "" &&
+                            obj.pointSizeVar != "\0") ||
+
+                           (obj.lineType == Tube &&
+                            obj.tubeRadiusVarEnabled &&
+                            obj.tubeRadiusVar != tubeRadiusVar &&
+                            obj.tubeRadiusVar != "default" &&
+                            obj.tubeRadiusVar != "" &&
+                            obj.tubeRadiusVar != "\0") ||
+
+                           ((obj.tailStyle != None ||
+                             obj.headStyle != None) &&
+                            obj.endPointRadiusVarEnabled &&
+                            obj.endPointRadiusVar != endPointRadiusVar &&
+                            obj.endPointRadiusVar != "default" &&
+                            obj.endPointRadiusVar != "" &&
+                            obj.endPointRadiusVar != "\0") ||
+
+                           (obj.opacityType == VariableRange &&
+                            obj.opacityVariable != opacityVariable &&
+                            obj.opacityVariable != "default" &&
+                            obj.opacityVariable != "" &&
+                            obj.opacityVariable != "\0");
+
+
+    bool geometryChange =  (lineType             != obj.lineType ||
+                            tubeRadiusSizeType   != obj.tubeRadiusSizeType ||
+                            tubeRadiusAbsolute   != obj.tubeRadiusAbsolute ||
+                            tubeRadiusBBox       != obj.tubeRadiusBBox ||
+                            tubeRadiusVarEnabled != obj.tubeRadiusVarEnabled ||
+                            tubeRadiusVar        != obj.tubeRadiusVar ||
+                            tubeRadiusVarRatio   != obj.tubeRadiusVarRatio ||
+                            tubeResolution       != obj.tubeResolution ||
+
+                            tailStyle                != obj.tailStyle ||
+                            headStyle                != obj.headStyle ||
+                            endPointRatio            != obj.endPointRatio ||
+                            endPointRadiusSizeType   != obj.endPointRadiusSizeType ||
+                            endPointRadiusAbsolute   != obj.endPointRadiusAbsolute ||
+                            endPointRadiusBBox       != obj.endPointRadiusBBox ||
+                            endPointRadiusVarEnabled != obj.endPointRadiusVarEnabled ||
+                            endPointRadiusVar        != obj.endPointRadiusVar ||
+                            endPointRadiusVarRatio   != obj.endPointRadiusVarRatio ||
+                            endPointResolution       != obj.endPointResolution ||
+                            0 );
+
+    //
+    // If we've switched to an opacity mode that contains transparency, we
+    // need to re-compute the face and ghost removal.
+    //
+    OpacityType newOpacType = obj.GetOpacityType();
+    bool alteringOpacChange = ((newOpacType != FullyOpaque &&
+                                OpacityType(opacityType) == FullyOpaque) ||
+                               (newOpacType == FullyOpaque &&
+                                OpacityType(opacityType) != FullyOpaque));
+
+    // Certain point type changes require a recalculation.
+    bool currentPointTypeIsPoint =     pointType == Point;
+    bool newPointTypeIsPoint     = obj.pointType == Point;
+
+    bool changingPointType =  pointType != obj.pointType && currentPointTypeIsPoint != newPointTypeIsPoint;
+
+    return (centering != obj.centering ||
+            needSecondaryVar ||
+            geometryChange ||
+            smoothingLevel != obj.smoothingLevel ||
+            renderSurfaces != obj.renderSurfaces ||
+            renderWireframe != obj.renderWireframe ||
+            renderPoints != obj.renderPoints ||
+            wireframeColor != obj.wireframeColor ||
+            pointColor != obj.pointColor ||
+            alteringOpacChange ||
+            changingPointType ||
+            0);
+
+}
+
+Function: Print
+Declaration: void Print(ostream &, bool) const;
+Definition:
+// ****************************************************************************
+// Method: PseudocolorAttributes::Print
+//
+// Purpose: Print the contents
+//
+// Programmer: Jeremy Meredith
+// Creation:   September 22, 2000
+//
+// Modifications:
+//   Kathleen Bonnell, Wed Dec 13 13:17:26 PST 2000
+//   Added opacity.
+//
+//   Brad Whitlock, Tue Apr 23 12:03:27 PDT 2002
+//   Ported to windows.
+//
+// ****************************************************************************
+
+void
+PseudocolorAttributes::Print(ostream &out, bool selected_only) const
+{
+    out << "{";
+
+    for(int i = 0; i < NumAttributes(); ++i)
+    {
+        if(selected_only && !IsSelected(i))
+            continue;
+
+        switch(i)
+        {
+          case  0: out << "legendFlag=" << GetLegendFlag();    break;
+          case  1: out << "lightingFlag=" << GetLightingFlag();break;
+          case  2: out << "minFlag=" << GetMinFlag();          break;
+          case  3: out << "maxFlag=" << GetMaxFlag();          break;
+          case  4: out << "centering=" << GetCentering();      break;
+          case  5: out << "scaling=" << GetScaling();          break;
+          case  6: out << "limitsMode=" << GetLimitsMode();    break;
+          case  7: out << "min=" << GetMin();                  break;
+          case  8: out << "max=" << GetMax();                  break;
+          case  9: out << "pointSize=" << GetPointSize();      break;
+          case 10: out << "skewFactor=" << GetSkewFactor();    break;
+          case 11: out << "opacityType=" << GetOpacityType();  break;
+          case 12: out << "colorTableName=" << GetColorTableName().c_str(); break;
+        }
+        out << ",";
+    }
+
+    out << "}";
+}
+
+Function: CreateCompatible
+Declaration: virtual AttributeSubject *CreateCompatible(const std::string &) const;
+Definition:
+// ****************************************************************************
+// Method: PseudocolorAttributes::CreateCompatible
+//
+// Purpose:
+//   CreateCompatible method for the PseudocolorAttributes class.
+//   Can also create PointGlyphAttributes and LineGlyphAttributes.
+//
+// Programmer: Kathleen Biagas
+// Creation:   June 4, 2020
+//
+// Modifications:
+//
+// ****************************************************************************
+
+AttributeSubject *
+PseudocolorAttributes::CreateCompatible(const std::string &tname) const
+{
+    AttributeSubject *retval = 0;
+
+    if(TypeName() == tname)
+    {
+        retval = new PseudocolorAttributes(*this);
+    }
+    else if(tname == "PointGlyph")
+    {
+        PointGlyphAttributes *pga = new PointGlyphAttributes();
+        pga->SetPointSize(GetPointSize());
+        pga->SetPointType(GetPointType());
+        pga->SetPointSizeVarEnabled(GetPointSizeVarEnabled());
+        pga->SetPointSizeVar(GetPointSizeVar());
+        pga->SetPointSizePixels(GetPointSizePixels());
+        retval = pga;
+    }
+    else if(tname == "LineGlyph")
+    {
+        LineGlyphAttributes *lga = new LineGlyphAttributes();
+
+        lga->SetLineType(LineGlyphAttributes::LineType(GetLineType()));
+        lga->SetLineWidth(GetLineWidth());
+        lga->SetTubeResolution(GetTubeResolution());
+        lga->SetTubeRadiusSizeType(LineGlyphAttributes::SizeType(GetTubeRadiusSizeType()));
+        lga->SetTubeRadiusAbsolute(GetTubeRadiusAbsolute());
+        lga->SetTubeRadiusBBox(GetTubeRadiusBBox());
+        lga->SetTubeRadiusVarEnabled(GetTubeRadiusVarEnabled());
+        lga->SetTubeRadiusVar(GetTubeRadiusVar());
+        lga->SetTubeRadiusVarRatio(GetTubeRadiusVarRatio());
+        lga->SetTailStyle(LineGlyphAttributes::EndPointStyle(GetTailStyle()));
+        lga->SetHeadStyle(LineGlyphAttributes::EndPointStyle(GetHeadStyle()));
+        lga->SetEndPointRadiusSizeType(LineGlyphAttributes::SizeType(GetEndPointRadiusSizeType()));
+        lga->SetEndPointRadiusAbsolute(GetEndPointRadiusAbsolute());
+        lga->SetEndPointRadiusBBox(GetEndPointRadiusBBox());
+        lga->SetEndPointResolution(GetEndPointResolution());
+        lga->SetEndPointRatio(GetEndPointRatio());
+        lga->SetEndPointRadiusVarEnabled(GetEndPointRadiusVarEnabled());
+        lga->SetEndPointRadiusVar(GetEndPointRadiusVar());
+        lga->SetEndPointRadiusVarRatio(GetEndPointRadiusVarRatio());
+
+        retval = lga;
+    }
+
+    return retval;
+}
+

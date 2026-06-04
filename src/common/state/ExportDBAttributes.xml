@@ -1,0 +1,34 @@
+<?xml version="1.0"?>
+  <Attribute name="ExportDBAttributes" purpose="The attributes for export a database" persistent="true" keyframe="true" exportAPI="STATE_API" exportInclude="state_exports.h" codefile="ExportDBAttributes.code">
+    <Field name="allTimes" label="All time steps" type="bool">
+      false
+    </Field>
+    <Field name="dirname" label="dirname" type="string">
+      .
+    </Field>
+    <Field name="filename" label="filename" type="string">
+      visit_ex_db
+    </Field>
+    <Field name="timeStateFormat" label="timeStateFormat" type="string">
+      _%04d
+    </Field>
+    <Field name="db_type" label="db_type" type="string">
+    </Field>
+    <Field name="db_type_fullname" label="db_type_fullname" type="string">
+    </Field>
+    <Field name="variables" label="variables" type="stringVector">
+    </Field>
+    <Field name="writeUsingGroups" label="Write using Groups" type="bool">
+      false
+    </Field>
+    <Field name="groupSize" label="Group size" type="int">
+      48
+    </Field>
+    <Field name="opts" label="opts" type="att" subtype="DBOptionsAttributes">
+    </Field>
+    <Function name="PyExportDBAttributes_ToString" user="false" member="false">
+    </Function>
+    <Include file="source" quoted="true" target="xml2python">
+      PyDBOptionsAttributes_Helpers.h
+    </Include>
+  </Attribute>

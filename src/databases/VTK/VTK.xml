@@ -1,0 +1,49 @@
+<?xml version="1.0"?>
+  <Plugin name="VTK" type="database" label="VTK" version="1.0" enabled="true" mdspecificcode="false" onlyengine="false" noengine="false" dbtype="STMD" haswriter="true" hasoptions="true" skipInfoGen="true">
+    <FilePatterns>
+      *.vtk
+      *.vti
+      *.vtp
+      *.vtr
+      *.vts
+      *.vtu
+      *.vtm
+      *.pvti
+      *.pvtk
+      *.pvtp
+      *.pvtr
+      *.pvts
+      *.pvtu
+      *.pvd
+    </FilePatterns>
+    <Files components="M">
+      avtPVDFileReader.C
+      avtVTKFileFormat.C
+      avtVTKFileReader.C
+      avtVTKOptions.C
+      vtkVisItXMLPDataReader.C
+      PVTKParser.C
+      VTMParser.C
+    </Files>
+    <Files components="E">
+      avtPVDFileReader.C
+      avtVTKFileFormat.C
+      avtVTKFileReader.C
+      avtVTKOptions.C
+      avtVTKWriter.C
+      vtkVisItXMLPDataReader.C
+      PVTKParser.C
+      VTMParser.C
+    </Files>
+    <LIBS>
+      vtkFiltersGeneral
+      vtkIOXML
+      vtkIOXMLParser
+    </LIBS>
+    <Attribute name="" purpose="" persistent="true" codefile="VTK.code">
+      <Function name="VTKCommonPluginInfo::SetupDatabase" user="false" member="true">
+      </Function>
+      <Function name="VTKCommonPluginInfo::GetDatabaseType" user="false" member="true">
+      </Function>
+    </Attribute>
+  </Plugin>

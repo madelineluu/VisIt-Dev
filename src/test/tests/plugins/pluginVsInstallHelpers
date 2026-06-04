@@ -1,0 +1,227 @@
+# Copyright (c) Lawrence Livermore National Security, LLC and other VisIt
+# Project developers.  See the top-level LICENSE file for dates and other
+# details.  No copyright assignment is required to contribute to VisIt.
+
+"""
+file: pluginVsInstallHelpers
+description: Helper methods for testing builds of plugins against installed VisIt.
+author: Kathleen Biagas
+date: November 8, 2018
+"""
+
+
+import glob
+import pprint
+
+# -----------------------------------------------------------------------------
+#   Method: saveLogFile
+#
+#   Programmer: Kathleen Biagas
+#   Date:       Thu Nov 8, 2018
+#
+#   Helper which saves a file to the test suite's logs directory.
+#
+#   Modifications:
+#     Kathleen Biagas, Wed Nov 18, 2020
+#     Changed location to result_dir.
+#
+# -----------------------------------------------------------------------------
+def saveLogFile(f):
+    res_dir = TestEnv.params["result_dir"]
+    logdir = pjoin(res_dir, "logs")
+    if not os.path.isdir(logdir):
+        os.mkdir(logdir)
+    logdir = pjoin(logdir, "plugins") 
+    if not os.path.isdir(logdir):
+        os.mkdir(logdir)
+    shutil.copy2(f, logdir)
+
+# -----------------------------------------------------------------------------
+#   Method: getVersion
+#
+#   Programmer: Kathleen Biagas
+#   Date:       Thu Nov 8, 2018
+#
+#   Helper which reads the VERSION file for the version and returns the string.
+#
+# -----------------------------------------------------------------------------
+def getVersion():
+    versionfile = visit_src_path("VERSION")
+    vf = open(versionfile, "r")
+    version = vf.readline()
+    vf.close()
+    return version[:-1].strip()
+
+# -----------------------------------------------------------------------------
+#   Method: regencmake
+#
+#   Programmer: Kathleen Biagas
+#   Date:       Thu Nov 8, 2018
+#
+#   Helper which runs xml2cmake for the given plugin.
+#
+# -----------------------------------------------------------------------------
+def regencmake(plugin, pluginResults):
+    print("regenerating cmake for ", plugin)
+    pluginArg = plugin + '.xml'
+    xml2cmake = visit_bin_path("..", "_install", "bin", "xml2cmake")
+    status = 1
+    fname = "%s_xml2cmake_res.txt" %plugin
+    f = open(fname, "w")
+    try:
+        subprocess.check_call([xml2cmake, "-clobber", "-public", pluginArg ],stdout=f,stderr=f)
+    except subprocess.CalledProcessError as err:
+        pluginResults[plugin] = 'xml2cmake failed'
+        status = 0
+    except OSError as e:
+        pluginResults[plugin] = 'xml2cmake executable could not be found'
+        status = 0
+    f.close()
+    if not status:
+        saveLogFile(fname)
+    return status
+
+# -----------------------------------------------------------------------------
+#   Method: build
+#
+#   Programmer: Kathleen Biagas
+#   Date:       Thu Nov 8, 2018
+#
+#   Helper which runs cmake and make for the given plugin.
+#
+# -----------------------------------------------------------------------------
+def build(plugin, pluginResults):
+    cmakecmd = TestEnv.params["cmake_cmd"]
+    if not os.path.isabs(cmakecmd):
+        # check if its in PATH
+        epath =os.environ['PATH']
+        for e in epath.split(":"):
+            cc = os.path.join(e, cmakecmd)
+            if os.path.isfile(cc):
+                cmakecmd = cc
+                break
+    if not os.path.isabs(cmakecmd):
+        pluginResults[plugin] = 'cmake executable (%s) could not be found'%cmakecmd
+        return 0
+    os.mkdir("build")
+    os.chdir("build")
+    status = 1
+    fname = "%s_build_res.txt" %plugin
+    f = open(fname, "w")
+    try:
+        print("running cmake for ", plugin)
+        subprocess.check_call([cmakecmd, "../"],stdout=f,stderr=f)
+    except subprocess.CalledProcessError as err:
+        pluginResults[plugin] = 'cmake configure failed'
+        status = 0
+    except OSError as e:
+        pluginResults[plugin] = 'cmake executable (%s) could not be found'%cmakecmd
+        status = 0
+
+    if status == 1:
+        try:
+            print("running make for ", plugin)
+            subprocess.check_call(["gmake", "-j", "8"],stdout=f,stderr=f)
+            pluginResults[plugin] = 'success'
+        except subprocess.CalledProcessError as err:
+            pluginResults[plugin] = 'make failed'
+            status = 0
+        except OSError as e:
+            pluginResults[plugin] = 'make executable could not be found'
+            status = 0
+    f.close()
+    if not status:
+        saveLogFile(fname)
+    os.chdir("..")
+    return status
+
+# -----------------------------------------------------------------------------
+#   Method: buildPlugin
+#
+#   Arguments:
+#     pluginType     Type of plugin: (databases, plots, operators)
+#     pluginList     A list of plugins of the given type to be built. 
+#
+#   Programmer: Kathleen Biagas
+#   Date:       Thu Nov 8, 2018
+#
+#   Helper which copies to the run dir and builds each plugin of the
+#   given type.
+#
+#   Modifications:
+#     Kathleen Biagas, Tue Nov 26 08:54:33 PST 2019
+#     Changed the skipList argument to a pluginList argument providing the
+#     list of plugins to build instead of to skip.
+#
+# -----------------------------------------------------------------------------
+def buildPlugin(pluginType, pluginList):
+    print("buildPlugin: ", pluginType)
+    plugindir = abs_path(TestEnv.params["run_dir"], pluginType)
+
+    if os.path.exists(plugindir):
+        shutil.rmtree(plugindir)
+
+    os.mkdir(plugindir)
+
+    for plugin in pluginList:
+        subprocess.call(["cp", "-R", visit_src_path(pluginType,plugin), plugindir])
+
+    os.chdir(plugindir)
+    plugins = glob.glob("*")
+    try:
+        # this exists for in-source builds but not out-of-source
+        plugins.remove("CMakeFiles")
+    except Exception:
+        pass 
+        
+    #print plugins
+    pluginResults={}
+    for pl in plugins:
+        if os.path.isdir(pl):
+            pluginResults[pl] = {}
+            os.chdir(pl)
+            status = regencmake(pl, pluginResults)
+            if status == 0: 
+                os.chdir("..")
+                continue
+            status = build(pl, pluginResults)
+            os.chdir("..")
+        
+    os.chdir("..")
+    return pluginResults
+
+
+# -----------------------------------------------------------------------------
+#   Method: do_plugin_type
+#
+#   Arguments:
+#     pluginType  The type of plugin to build: (databases, plots, operators)
+#     pluginList  A list of plugins of the given type to build.
+#
+#   Programmer: Kathleen Biagas
+#   Date:       Thu Nov 8, 2018
+#
+#   Main helper which calls the rest for the given plugin type.
+#
+#   Modifications:
+#     Kathleen Biagas, Tue Nov 26 08:54:33 PST 2019
+#     Changed the skipList argument to a pluginList argument providing the
+#     list of plugins to build instead of to skip.
+#
+# -----------------------------------------------------------------------------
+
+def do_plugin_type(pluginType, pluginList):
+    installDir = visit_bin_path("..", "_install")
+    version = getVersion()
+    if not os.path.isdir(abs_path(installDir, version)):
+        TestText("%sVsInstall"%pluginType, "No installed package.")
+        Exit(-1)
+
+    results = {}
+    results = buildPlugin(pluginType, pluginList)
+
+    pp = pprint.PrettyPrinter(indent=4)
+    txt = pp.pformat(results) + "\n"
+    TestText("%sVsInstall"%pluginType, txt)
+
+

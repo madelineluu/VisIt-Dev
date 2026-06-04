@@ -1,0 +1,16 @@
+Rendering blocker for issue #18984 (scatter plot log axis labels)
+================================================================
+
+This build cannot produce plot images for validation:
+
+- Compute engine error: "GLEW could not be initialized" (see A.engine_ser.*.vlog
+  under build/bin when rendering is attempted).
+- SaveWindow / scalable rendering can SIGSEGV the engine.
+
+Impact on #18984:
+- The root cause is diagnosed via non-rendering Query("SpatialExtents") in
+  repro/bug_18984.py (log-scaled coordinates live in log10 space).
+- A full fix should route scatter log axes through View2D LOG scaling +
+  avtMeshLogFilter; verifying tick labels requires a working offscreen GL stack.
+
+See notes.md in this folder for the proposed fix and resume steps.

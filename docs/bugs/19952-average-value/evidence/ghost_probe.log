@@ -1,0 +1,18 @@
+Running: cli -dv -nowin -s /home/users/mluu/uoregon-cs510-scivis/project6/visit3.4.0/docs/bugs/19952-average-value/repro/bug_19952_ghost.py
+Running: viewer -dv -nowin -noint -host 127.0.0.1 -port 5600
+Running: mdserver -dv -host 127.0.0.1 -port 5600
+VisIt: Message - VisIt closed "localhost:/home/users/mluu/uoregon-cs510-scivis/project6/visit3.4.0/docs/bugs/19952-average-value/repro/output/bug19952_ghost.vtk".
+Running: engine_ser -dv -host 127.0.0.1 -port 5600
+STAT_VALS=(2.0, 10.0, 20.0, 10.0, 30.0, 15.0, 7.0710678118654755, 50.0, 0.0, 0.0)
+Count     = 2
+Minimum   = 10
+Maximum   = 20
+Range     = 10
+Sum       = 30
+Mean      = 15  (unweighted; use "Average Value" for the size-weighted mean)
+Std Dev   = 7.07107
+Variance  = 50
+Skewness  = 0
+Kurtosis  = 0
+SAMPLE_MEAN=15.0
+UNWEIGHTED=15.0

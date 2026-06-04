@@ -1,0 +1,16 @@
+Running: cli -dv -nowin -s /home/users/mluu/uoregon-cs510-scivis/project6/visit3.4.0/docs/bugs/18984-scatter-log-axis/repro/bug_18984.py
+Running: viewer -dv -nowin -noint -host 127.0.0.1 -port 5600
+Running: mdserver -dv -host 127.0.0.1 -port 5600
+Running: engine_ser -dv -host 127.0.0.1 -port 5600
+======================================================================
+VisIt #18984 - non-rendering root-cause check
+======================================================================
+Linear X scaling, SpatialExtents = [1.000000013351432e-10, 0.03133070096373558, 1.000000013351432e-10, 0.017087100073695183]
+Log    X scaling, SpatialExtents = [-10.0, -1.5040298700332642, 1.000000013351432e-10, 0.017087100073695183]
+----------------------------------------------------------------------
+Linear X range : [1e-10, 0.0313307]
+Log    X range : [-10, -1.50403]  <- log10 of real values
+
+Axis ticks would label the Log range (small integers), not the
+real data values. See ../notes.md for the proposed fix.
+======================================================================

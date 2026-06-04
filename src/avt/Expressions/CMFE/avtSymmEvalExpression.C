@@ -1,0 +1,213 @@
+// Copyright (c) Lawrence Livermore National Security, LLC and other VisIt
+// Project developers.  See the top-level LICENSE file for dates and other
+// details.  No copyright assignment is required to contribute to VisIt.
+
+// ************************************************************************* //
+//                           avtSymmEvalExpression.C                         //
+// ************************************************************************* //
+
+#include <avtSymmEvalExpression.h>
+
+#include <avtExprNode.h>
+#include <ExprToken.h>
+#include <ParsingExprList.h>
+
+#include <avtPosCMFEAlgorithm.h>
+
+#include <ExpressionException.h>
+
+#include <string>
+#include <vector>
+
+// ****************************************************************************
+//  Method: avtSymmEvalExpression constructor
+//
+//  Purpose:
+//      Defines the constructor.  Note: this should not be inlined in the
+//      header because it causes problems for certain compilers.
+//
+//  Programmer: Hank Childs
+//  Creation:   January 21, 2006
+//
+// ****************************************************************************
+
+avtSymmEvalExpression::avtSymmEvalExpression()
+{
+}
+
+
+// ****************************************************************************
+//  Method: avtSymmEvalExpression destructor
+//
+//  Purpose:
+//      Defines the destructor.  Note: this should not be inlined in the
+//      header because it causes problems for certain compilers.
+//
+//  Programmer: Hank Childs
+//  Creation:   January 21, 2006
+//
+// ****************************************************************************
+
+avtSymmEvalExpression::~avtSymmEvalExpression()
+{
+}
+
+
+// ****************************************************************************
+//  Method: avtSymmEvalExpression::AddInputVariableName
+//
+//  Purpose:
+//      Adds an input variable's name.
+//
+//  Programmer: Hank Childs
+//  Creation:   January 21, 2006
+//
+// ****************************************************************************
+
+void
+avtSymmEvalExpression::AddInputVariableName(const char *vname)
+{
+    avtExpressionFilter::AddInputVariableName(vname);
+    varnames.push_back(vname);
+}
+
+
+// ****************************************************************************
+//  Method: avtSymmEvalExpression::ProcessArguments
+//
+//  Purpose:
+//      Processes the expression arguments.
+//
+//  Programmer: Hank Childs
+//  Creation:   January 21, 2006
+//
+//  Modifications:
+//    Jeremy Meredith, Thu Aug  7 14:33:34 EDT 2008
+//    Use %ld for long integers.
+//
+// ****************************************************************************
+
+void
+avtSymmEvalExpression::ProcessArguments(ArgsExpr *args,
+                                        ExprPipelineState *state)
+{
+    const char *badSyntaxMsg = "The symmetry evaluation expression expects "
+             "three arguments: a variable, a default variable to use when "
+             "the mesh is not defined across the symmetry condition, and "
+             "a list of input parameters, [#, ..., #]";
+
+    // Check the number of arguments
+    std::vector<ArgExpr*> *arguments = args->GetArgs();
+    size_t nargs = arguments->size();
+    if (nargs != 3)
+        EXCEPTION2(ExpressionException, outputVariableName, badSyntaxMsg);
+
+    // Tell the variables to create their filters.
+    ArgExpr *firstarg = (*arguments)[0];
+    avtExprNode *firstTree = dynamic_cast<avtExprNode*>(firstarg->GetExpr());
+    firstTree->CreateFilters(state);
+    ArgExpr *secondarg = (*arguments)[1];
+    avtExprNode *secondTree = dynamic_cast<avtExprNode*>(secondarg->GetExpr());
+    secondTree->CreateFilters(state);
+
+    // Now go through the third argument, which should be a list.
+    ArgExpr *thirdarg = (*arguments)[2];
+    ExprParseTreeNode *thirdTree = thirdarg->GetExpr();
+    std::string type = thirdTree->GetTypeName();
+    if (type != "List")
+        EXCEPTION2(ExpressionException, outputVariableName, badSyntaxMsg);
+
+    // It's a list.  Process all of them.
+    inputParameters.clear();
+    ListExpr *list = dynamic_cast<ListExpr*>(thirdTree);
+    std::vector<ListElemExpr*> *elems = list->GetElems();
+    if (static_cast<int>(elems->size()) != GetNumberOfInputParameters())
+    {
+        char msg[1024];
+        snprintf(msg, 1024, "%s.  You're list had %ld numbers, where %d were "
+                  "expected.", badSyntaxMsg, elems->size(), 
+                 GetNumberOfInputParameters());
+        EXCEPTION2(ExpressionException, outputVariableName, msg);
+    }
+
+    for (size_t i = 0 ; i < elems->size() ; i++)
+    {
+        ExprNode *item = (*elems)[i]->GetItem();
+        std::string type = item->GetTypeName();
+        bool negate = false;
+        if (type == "Unary")
+        {
+            UnaryExpr *unary = dynamic_cast<UnaryExpr*>(item);
+            item = unary->GetExpr();
+            type = item->GetTypeName();
+            negate = true;
+        }
+        if (type != "IntegerConst" && type != "FloatConst")
+        {
+            char msg[1024];
+            snprintf(msg, 1024, "%s.  Element #%d in your list was "
+                      "not a number.",  badSyntaxMsg, static_cast<int>(i));
+            EXCEPTION2(ExpressionException, outputVariableName, msg);
+        }
+        ConstExpr *c = dynamic_cast<ConstExpr*>(item);
+        if (c->GetConstantType() == ConstExpr::Integer)
+        {
+            int v = dynamic_cast<IntegerConstExpr*>(c)->GetValue();
+            if (negate)
+                v = -v;
+            inputParameters.push_back(v);
+        }
+        else if (c->GetConstantType() == ConstExpr::Float)
+        {
+            double v = dynamic_cast<FloatConstExpr*>(c)->GetValue();
+            if (negate)
+                v = -v;
+            inputParameters.push_back(v);
+        }
+        else
+        {
+            EXCEPTION2(ExpressionException, outputVariableName, badSyntaxMsg);
+        }
+    }
+}
+
+
+// ****************************************************************************
+//  Method: avtSymmEvalExpression::Execute
+//
+//  Purpose:
+//      Executes the symmetry evaluation.
+//
+//  Programmer: Hank Childs
+//  Creation:   January 21, 2006
+//
+//  Modifications:
+//
+//    Hank Childs, Wed Mar 14 08:47:56 PDT 2012
+//    Add new argument to function call indicating whether this is a serial-
+//    only execution.  (It isn't.)
+//
+// ****************************************************************************
+
+void
+avtSymmEvalExpression::Execute(void)
+{
+    avtDataObject_p input = GetInput();
+    avtDataObject_p transformed = TransformData(input);
+    avtDataTree_p in1 = ((avtDataset *) (*input))->GetDataTree();
+    avtDataTree_p in2 = ((avtDataset *) (*transformed))->GetDataTree();
+
+    if (varnames.size() != 2)
+    {
+        EXCEPTION2(ExpressionException, outputVariableName, "Symmetry evaluation expressions "
+                      "must take the form: <var> <default-var> [parameters]");
+    }
+
+    bool serialOnly = false;
+    avtDataTree_p output = avtPosCMFEAlgorithm::PerformCMFE(in1, in2,
+                                 varnames[0], varnames[1], outputVariableName,
+                                 serialOnly);
+    SetOutputDataTree(output);
+}
+
+
