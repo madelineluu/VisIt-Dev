@@ -10,7 +10,7 @@ This repository is a personal fork of VisIt 3.4.0 with fixes and documentation f
 
 | Document | Purpose |
 |----------|---------|
-| [docs/README.md](docs/README.md) | Sprint summary for graders |
+| [docs/README.md](docs/README.md) | Sprint summary for Hank |
 | [docs/bugs/README.md](docs/bugs/README.md) | Per-issue index (repro, evidence, notes) |
 
 ## Bugs addressed
@@ -44,7 +44,7 @@ cd build/bin
 - **Image rendering broken** — compute engine fails OpenGL init (`GLEW could not be initialized`). Verification uses metadata and queries, not saved images.
 - **No Silo plugin** in this build — repros use synthetic VTK/ultra files under `docs/bugs/*/repro/`.
 
-## What to grade
+## For Hank — review checklist
 
 | Issue | Code | Test | Evidence |
 |-------|------|------|----------|
@@ -53,4 +53,4 @@ cd build/bin
 | #19952 | `src/avt/Queries/` | `src/test/tests/queries/*.py` | `docs/bugs/19952-average-value/evidence/` |
 | #18984 | (diagnosis) | — | `docs/bugs/18984-scatter-log-axis/` |
 
-The `build/` directory is **not** committed; you must build locally to run repros.
+The `build/` directory is **not** committed; a local build is required to run the repro scripts.

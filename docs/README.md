@@ -120,7 +120,7 @@ ghost cells.
 | #18984 | `bugs/18984-scatter-log-axis/notes.md` | `.../repro/bug_18984.py` | `.../evidence/` |
 | #19952 | `bugs/19952-average-value/notes.md` | `.../repro/bug_19952*.py` | `validation.log`, `ghost_probe.log` |
 
-Run all repros from repo root: `./scripts/run_all_repros.sh` (requires local `build/`).
+Run all repros from repo root: `./scripts/run_all_repros.sh` (requires a local `build/`).
 
 Tests: `src/test/tests/databases/curve_utf16.py`,
 `cycle_from_filename.py`, `src/test/tests/queries/average_weighting.py`,
