@@ -44,8 +44,6 @@ cd build/bin
 - **Image rendering broken** — compute engine fails OpenGL init (`GLEW could not be initialized`). Verification uses metadata and queries, not saved images.
 - **No Silo plugin** in this build — repros use synthetic VTK/ultra files under `docs/bugs/*/repro/`.
 
-## For Hank — review checklist
-
 | Issue | Code | Test | Evidence |
 |-------|------|------|----------|
 | #18516 | `src/databases/Curve2D/` | `curve_utf16.py` | `docs/bugs/18516-utf16-curve/evidence/` |
